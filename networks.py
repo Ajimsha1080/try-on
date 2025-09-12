@@ -36,10 +36,29 @@ class GMM(nn.Module):
         self.extractionA = FeatureExtractor(inputA_nc, 22)
         self.extractionB = FeatureExtractor(inputB_nc, 22)
 
-        # correlation layer (dot product of features)
+        # correlation layer (combine features)
         self.correlation = nn.Conv2d(22 * 2, 128, kernel_size=3, stride=1, padding=1)
 
         # regression head (predict transformation grid)
         self.regressor = nn.Sequential(
             nn.Conv2d(128, 64, kernel_size=3, stride=2, padding=1),
-            nn
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 32, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Flatten(),
+            nn.Linear(32 * (opt.fine_height // 16) * (opt.fine_width // 16), 50),  # 50 params
+        )
+
+    def forward(self, cloth, person):
+        featA = self.extractionA(cloth)
+        featB = self.extractionB(person)
+
+        # concat features
+        corr = torch.cat([featA, featB], dim=1)
+        corr = self.correlation(corr)
+
+        # predict transformation params
+        theta = self.regressor(corr)
+
+        # here we just return theta (in practice you'd warp cloth with grid_sample)
+        return theta
