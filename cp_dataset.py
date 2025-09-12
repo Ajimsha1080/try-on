@@ -75,5 +75,4 @@ class CPDataset(data.Dataset):
             'c_name': c_name
         }
 
-    def __len__(self):
-        return len(self.im_names)
+   
