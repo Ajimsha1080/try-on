@@ -2,99 +2,103 @@ import os
 import argparse
 import torch
 from torch.utils.data import DataLoader
+import torchvision.utils as vutils
 
 from cp_dataset import CPDataset
 from networks import GMM, UnetGenerator
-from utils import save_images, tensorboard_visualize
+
+
+# ----------------------------
+# Helper functions
+# ----------------------------
+
+def save_images(cloth, image, result, save_dir, step):
+    """Save cloth, image, and result side by side."""
+    os.makedirs(save_dir, exist_ok=True)
+    # Concatenate along width
+    combined = torch.cat([cloth, image, result], 3)
+    vutils.save_image(
+        combined,
+        os.path.join(save_dir, f"step_{step:06d}.png"),
+        nrow=1,
+        normalize=True
+    )
+
+def tensorboard_visualize(*args, **kwargs):
+    """Dummy function (optional: expand to real TensorBoard logging)."""
+    pass
+
+
+# ----------------------------
+# Main testing
+# ----------------------------
 
 def get_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--name", default="GMM", help="name of the experiment")
-    parser.add_argument("--gpu_ids", default="0", help="gpu ids: e.g. 0  0,1,2  0,2")
-    parser.add_argument("--workers", type=int, default=1, help="number of data loading workers")
-    parser.add_argument("--batch_size", type=int, default=4, help="input batch size")
-    parser.add_argument("--dataroot", default="data", help="root directory of dataset")
-    parser.add_argument("--datamode", default="test", help="train or test")
-    parser.add_argument("--stage", default="GMM", help="stage: GMM or TOM")
-    parser.add_argument("--data_list", default="test_pairs.txt", help="data list file")
-    parser.add_argument("--fine_width", type=int, default=192, help="resized image width")
-    parser.add_argument("--fine_height", type=int, default=256, help="resized image height")
-    parser.add_argument("--radius", type=int, default=5, help="radius for GMM")
-    parser.add_argument("--grid_size", type=int, default=5, help="grid size for GMM")
-    parser.add_argument("--tensorboard_dir", default="tensorboard", help="save tensorboard logs here")
-    parser.add_argument("--result_dir", default="result", help="save results here")
-    parser.add_argument("--checkpoint", default="", help="path to checkpoint")
-    parser.add_argument("--display_count", type=int, default=1, help="frequency of showing training results on screen")
-    parser.add_argument("--shuffle", action="store_true", help="whether to shuffle the dataset")
+    parser.add_argument("--name", default="GMM", help="Name of the experiment")
+    parser.add_argument("--gpu_ids", default="0", help="GPU ids")
+    parser.add_argument("--workers", type=int, default=1, help="DataLoader workers")
+    parser.add_argument("--batch_size", type=int, default=4, help="Batch size")
+    parser.add_argument("--dataroot", default="data", help="Dataset root")
+    parser.add_argument("--datamode", default="test", help="train/test/val")
+    parser.add_argument("--stage", default="GMM", help="Stage: GMM or TOM")
+    parser.add_argument("--data_list", default="test_pairs.txt", help="Pairs file")
+    parser.add_argument("--fine_width", type=int, default=192, help="Cloth width")
+    parser.add_argument("--fine_height", type=int, default=256, help="Cloth height")
+    parser.add_argument("--radius", type=int, default=5, help="For TPS transformation")
+    parser.add_argument("--grid_size", type=int, default=5, help="For TPS grid")
+    parser.add_argument("--tensorboard_dir", default="tensorboard", help="TensorBoard dir")
+    parser.add_argument("--result_dir", default="result", help="Results dir")
+    parser.add_argument("--checkpoint", default="checkpoints/GMM/gmm_final.pth", help="Model checkpoint")
+    parser.add_argument("--display_count", type=int, default=1, help="How often to save images")
+    parser.add_argument("--shuffle", action="store_true", help="Shuffle dataset")
     return parser.parse_args()
 
-def test_gmm(opt, test_loader, model):
+
+def test_gmm(opt, data_loader, model):
     model.eval()
-    os.makedirs(opt.result_dir, exist_ok=True)
     with torch.no_grad():
-        for step, inputs in enumerate(test_loader):
-            c = inputs["cloth"].cuda()
-            cm = inputs["cloth_mask"].cuda()
-            im = inputs["image"].cuda()
-            im_pose = inputs["pose"].cuda()
+        for step, inputs in enumerate(data_loader):
+            cloth = inputs["cloth"].cuda()
+            image = inputs["image"].cuda()
 
-            # Forward pass through the model
-            warped_cloth, warped_grid = model(c, cm, im_pose)
+            # Forward pass
+            result = model(cloth, image)
 
-            # Save results
-            save_images(c, im, warped_cloth, opt.result_dir, step)
-
+            # Save images
             if step % opt.display_count == 0:
-                print(f"[Step {step}] Saved results")
+                save_images(cloth, image, result, opt.result_dir, step)
 
-def test_tom(opt, test_loader, model):
-    model.eval()
-    os.makedirs(opt.result_dir, exist_ok=True)
-    with torch.no_grad():
-        for step, inputs in enumerate(test_loader):
-            c = inputs["cloth"].cuda()
-            cm = inputs["cloth_mask"].cuda()
-            im = inputs["image"].cuda()
-            im_pose = inputs["pose"].cuda()
-            im_g = inputs["image_masked"].cuda()
-            im_c = inputs["cloth_masked"].cuda()
-
-            output = model(torch.cat([im_c, im_pose], 1))
-            p_rendered, m_composite = torch.split(output, [3, 1], 1)
-            p_rendered = torch.tanh(p_rendered)
-            m_composite = torch.sigmoid(m_composite)
-            im_tryon = c * m_composite + p_rendered * (1 - m_composite)
-
-            save_images(c, im, im_tryon, opt.result_dir, step)
-
-            if step % opt.display_count == 0:
-                print(f"[Step {step}] Saved results")
 
 def main():
     opt = get_opt()
+    print(opt)
     print(f"Start to test stage: {opt.stage}, named: {opt.name}!")
 
     dataset = CPDataset(opt)
-    test_loader = DataLoader(dataset, batch_size=opt.batch_size,
-                             shuffle=opt.shuffle, num_workers=opt.workers)
+    data_loader = DataLoader(
+        dataset,
+        batch_size=opt.batch_size,
+        shuffle=opt.shuffle,
+        num_workers=opt.workers
+    )
 
     if opt.stage == "GMM":
-        model = GMM(opt.fine_height, opt.fine_width, opt.radius, opt.grid_size).cuda()
-    elif opt.stage == "TOM":
-        model = UnetGenerator(22, 4, 6, ngf=64, norm_layer=torch.nn.InstanceNorm2d).cuda()
+        model = GMM(opt).cuda()
     else:
-        raise ValueError(f"Unknown stage: {opt.stage}")
+        model = UnetGenerator(3, 3, 6, ngf=64, norm_layer=torch.nn.InstanceNorm2d).cuda()
 
-    if opt.checkpoint and os.path.exists(opt.checkpoint):
-        print(f"Loading checkpoint from {opt.checkpoint}")
-        model.load_state_dict(torch.load(opt.checkpoint))
+    if os.path.exists(opt.checkpoint):
+        model.load_state_dict(torch.load(opt.checkpoint, map_location="cuda"))
+        print(f"Loaded checkpoint {opt.checkpoint}")
     else:
-        print("Warning: No checkpoint found, running with random weights!")
+        print(f"Warning: checkpoint {opt.checkpoint} not found!")
 
     if opt.stage == "GMM":
-        test_gmm(opt, test_loader, model)
+        test_gmm(opt, data_loader, model)
     else:
-        test_tom(opt, test_loader, model)
+        print("TOM stage not implemented yet.")
+
 
 if __name__ == "__main__":
     main()
