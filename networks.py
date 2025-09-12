@@ -6,7 +6,6 @@ import torch.nn.functional as F
 class FeatureExtractor(nn.Module):
     """
     Simple feature extractor with 2 convolutional layers.
-    Takes an image (e.g., cloth/person RGB) and extracts features.
     """
     def __init__(self, input_nc, output_nc):
         super(FeatureExtractor, self).__init__()
@@ -23,16 +22,24 @@ class FeatureExtractor(nn.Module):
 
 class GMM(nn.Module):
     """
-    Geometric Matching Module (simplified for test stage).
-    Takes cloth + person images and predicts aligned cloth.
+    Geometric Matching Module (simplified).
+    Takes cloth + person images and produces aligned cloth.
     """
     def __init__(self, opt):
         super(GMM, self).__init__()
 
-        # ✅ fixed input channels
+        # fixed input channels
         inputA_nc = 3   # cloth RGB
         inputB_nc = 3   # person RGB
 
         # feature extractors
         self.extractionA = FeatureExtractor(inputA_nc, 22)
-        self.ex
+        self.extractionB = FeatureExtractor(inputB_nc, 22)
+
+        # correlation layer (dot product of features)
+        self.correlation = nn.Conv2d(22 * 2, 128, kernel_size=3, stride=1, padding=1)
+
+        # regression head (predict transformation grid)
+        self.regressor = nn.Sequential(
+            nn.Conv2d(128, 64, kernel_size=3, stride=2, padding=1),
+            nn
