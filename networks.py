@@ -3,126 +3,36 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# ----------------------------
-# Feature Extractor (used in GMM)
-# ----------------------------
 class FeatureExtractor(nn.Module):
-    def __init__(self, input_nc=3, output_nc=22):
+    """
+    Simple feature extractor with 2 convolutional layers.
+    Takes an image (e.g., cloth/person RGB) and extracts features.
+    """
+    def __init__(self, input_nc, output_nc):
         super(FeatureExtractor, self).__init__()
         self.model = nn.Sequential(
             nn.Conv2d(input_nc, 64, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(True),
-            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(True),
-            nn.Conv2d(128, output_nc, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(output_nc),
-            nn.ReLU(True)
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, output_nc, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(inplace=True)
         )
 
     def forward(self, x):
         return self.model(x)
 
 
-# ----------------------------
-# GMM (Geometric Matching Module)
-# ----------------------------
 class GMM(nn.Module):
-    def __init__(self, inputA_nc=3, inputB_nc=3, grid_size=5):
+    """
+    Geometric Matching Module (simplified for test stage).
+    Takes cloth + person images and predicts aligned cloth.
+    """
+    def __init__(self, opt):
         super(GMM, self).__init__()
+
+        # ✅ fixed input channels
+        inputA_nc = 3   # cloth RGB
+        inputB_nc = 3   # person RGB
+
+        # feature extractors
         self.extractionA = FeatureExtractor(inputA_nc, 22)
-        self.extractionB = FeatureExtractor(inputB_nc, 22)
-        self.grid_size = grid_size
-
-        # Regression network
-        self.regression = nn.Sequential(
-            nn.Conv2d(44, 64, kernel_size=7, stride=1, padding=3),
-            nn.ReLU(True),
-            nn.Conv2d(64, 32, kernel_size=7, stride=1, padding=3),
-            nn.ReLU(True),
-            nn.Conv2d(32, grid_size * grid_size * 2, kernel_size=7, stride=1, padding=3)
-        )
-
-    def forward(self, inputA, inputB):
-        featureA = self.extractionA(inputA)
-        featureB = self.extractionB(inputB)
-        feature = torch.cat([featureA, featureB], 1)
-        theta = self.regression(feature)
-        return theta
-
-
-# ----------------------------
-# UNet Skip Connection Block
-# ----------------------------
-class UnetSkipConnectionBlock(nn.Module):
-    def __init__(self, outer_nc, inner_nc, input_nc=None,
-                 submodule=None, outermost=False, innermost=False,
-                 norm_layer=nn.BatchNorm2d, use_dropout=False):
-        super(UnetSkipConnectionBlock, self).__init__()
-        self.outermost = outermost
-        if input_nc is None:
-            input_nc = outer_nc
-        downconv = nn.Conv2d(input_nc, inner_nc, kernel_size=4,
-                             stride=2, padding=1, bias=False)
-        downrelu = nn.LeakyReLU(0.2, True)
-        downnorm = norm_layer(inner_nc)
-        uprelu = nn.ReLU(True)
-        upnorm = norm_layer(outer_nc)
-
-        if outermost:
-            upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
-                                        kernel_size=4, stride=2,
-                                        padding=1)
-            down = [downconv]
-            up = [uprelu, upconv, nn.Tanh()]
-            model = down + [submodule] + up
-        elif innermost:
-            upconv = nn.ConvTranspose2d(inner_nc, outer_nc,
-                                        kernel_size=4, stride=2,
-                                        padding=1, bias=False)
-            down = [downrelu, downconv]
-            up = [uprelu, upconv, upnorm]
-            model = down + up
-        else:
-            upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
-                                        kernel_size=4, stride=2,
-                                        padding=1, bias=False)
-            down = [downrelu, downconv, downnorm]
-            up = [uprelu, upconv, upnorm]
-
-            if use_dropout:
-                model = down + [submodule] + up + [nn.Dropout(0.5)]
-            else:
-                model = down + [submodule] + up
-
-        self.model = nn.Sequential(*model)
-
-    def forward(self, x):
-        if self.outermost:
-            return self.model(x)
-        else:
-            return torch.cat([x, self.model(x)], 1)
-
-
-# ----------------------------
-# UNet Generator (used in TOM)
-# ----------------------------
-class UnetGenerator(nn.Module):
-    def __init__(self, input_nc, output_nc, num_downs, ngf=64,
-                 norm_layer=nn.BatchNorm2d, use_dropout=False):
-        super(UnetGenerator, self).__init__()
-
-        # Construct unet structure
-        unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, innermost=True)
-        for _ in range(num_downs - 5):
-            unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8,
-                                                 submodule=unet_block,
-                                                 use_dropout=use_dropout)
-        unet_block = UnetSkipConnectionBlock(ngf * 4, ngf * 8, submodule=unet_block)
-        unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, submodule=unet_block)
-        unet_block = UnetSkipConnectionBlock(ngf, ngf * 2, submodule=unet_block)
-        self.model = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc,
-                                             submodule=unet_block, outermost=True)
-
-    def forward(self, input):
-        return self.model(input)
+        self.ex
