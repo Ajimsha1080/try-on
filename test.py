@@ -1,77 +1,85 @@
-import os
-import argparse
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.autograd import Variable
+from torchvision import transforms
 
-# Import your dataset + model (adjust these to match your repo)
-from datasets import CPDataset, CPDataLoader
-from models import GMM
-from utils import save_images
+from datasets.cp_dataset import CPDataset, CPDataLoader
+from networks import GMM
 
 
 def get_opt():
+    import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--datadir", type=str, default="data", help="data directory")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/GMM/gmm_final.pth", help="path to checkpoint")
-    parser.add_argument("--batch_size", type=int, default=4, help="batch size")
-    parser.add_argument("--workers", type=int, default=4, help="number of workers")
-    parser.add_argument("--gpu_ids", type=str, default="0", help="gpu ids: e.g. 0  0,1,2  0,2. use -1 for CPU")
-    parser.add_argument("--result_dir", type=str, default="results", help="save results")
-    return parser.parse_args()
+    parser.add_argument("--name", default="GMM", help="name of the experiment")
+    parser.add_argument("--gpu_ids", default="0", help="gpu ids")
+    parser.add_argument("--workers", type=int, default=1, help="number of data loading workers")
+    parser.add_argument("--batch_size", type=int, default=4, help="input batch size")
+    parser.add_argument("--dataroot", default="data", help="root directory of dataset")
+    parser.add_argument("--datamode", default="test", help="train or test mode")
+    parser.add_argument("--stage", default="GMM", help="stage: GMM or TOM")
+    parser.add_argument("--data_list", default="test_pairs.txt", help="data list file")
+    parser.add_argument("--fine_width", type=int, default=192, help="resized image width")
+    parser.add_argument("--fine_height", type=int, default=256, help="resized image height")
+    parser.add_argument("--radius", type=int, default=5, help="radius for mask dilation")
+    parser.add_argument("--grid_size", type=int, default=5, help="grid size for TPS")
+    parser.add_argument("--tensorboard_dir", default="tensorboard", help="save tensorboard logs here")
+    parser.add_argument("--result_dir", default="result", help="save result images here")
+    parser.add_argument("--checkpoint", default="checkpoints/GMM/gmm_final.pth", help="model checkpoint")
+    parser.add_argument("--display_count", type=int, default=1, help="frequency of showing training results")
+    parser.add_argument("--shuffle", action="store_true", help="shuffle input data")
+    opt = parser.parse_args([])
+    return opt
 
 
 def load_checkpoint(model, checkpoint_path):
-    print(f"🔍 Loading checkpoint from {checkpoint_path} ...")
-    state_dict = torch.load(checkpoint_path, map_location="cpu")
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
-    model_dict = model.state_dict()
-    filtered_dict = {}
+    print(f"Loading checkpoint from {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
 
-    for k, v in state_dict.items():
-        if k in model_dict and v.shape == model_dict[k].shape:
-            filtered_dict[k] = v
-        else:
-            print(f"[Skipped] {k} | checkpoint {tuple(v.shape)} != model {tuple(model_dict.get(k, torch.empty(0)).shape)}")
+    if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+        checkpoint = checkpoint["state_dict"]
 
-    # update and load
-    model_dict.update(filtered_dict)
-    model.load_state_dict(model_dict)
+    # Try flexible loading
+    try:
+        model.load_state_dict(checkpoint)
+    except RuntimeError as e:
+        print("⚠️ Checkpoint mismatch, loading with strict=False")
+        model.load_state_dict(checkpoint, strict=False)
 
-    print(f"✅ Loaded {len(filtered_dict)}/{len(state_dict)} layers successfully")
     return model
 
 
 def main():
     opt = get_opt()
-    print("Options:", opt)
 
-    # set device
-    device = torch.device("cuda" if (torch.cuda.is_available() and opt.gpu_ids != "-1") else "cpu")
+    dataset = CPDataset(opt)
+    data_loader = CPDataLoader(opt, dataset)
 
-    # dataset + dataloader
-    dataset = CPDataset(opt.datadir)
-    dataloader = DataLoader(dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.workers)
-
-    # model
-    model = GMM(opt).to(device)
+    model = GMM(opt)
     model = load_checkpoint(model, opt.checkpoint)
+    model.cuda()
     model.eval()
 
-    os.makedirs(opt.result_dir, exist_ok=True)
-
     with torch.no_grad():
-        for i, inputs in enumerate(dataloader):
-            for key in inputs:
-                inputs[key] = inputs[key].to(device)
+        for step, inputs in enumerate(data_loader.data_loader):
+            cloth = inputs["cloth"].cuda()
+            agnostic = inputs["agnostic"].cuda()
 
-            # forward pass
-            outputs = model(inputs)
+            output = model(agnostic, cloth)
 
-            # save results
-            save_images(outputs, inputs, opt.result_dir, i)
+            # Save outputs
+            save_dir = os.path.join(opt.result_dir, "GMM")
+            os.makedirs(save_dir, exist_ok=True)
+            save_path = os.path.join(save_dir, f"{step:05d}.png")
+            transforms.ToPILImage()(output[0].cpu()).save(save_path)
 
-    print("🎉 Testing complete! Results saved to", opt.result_dir)
+            if step % opt.display_count == 0:
+                print(f"[Step {step}] Saved {save_path}")
 
 
 if __name__ == "__main__":
