@@ -4,13 +4,14 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import argparse
 
-# ✅ Use only CPDataset (no CPDataLoader in your repo)
 from cp_dataset import CPDataset
-from networks import GMM  # or other networks you use
+from networks import GMM  # Adjust if you also need TOM
 
 
 def get_opt():
     parser = argparse.ArgumentParser()
+
+    # Original args
     parser.add_argument("--name", type=str, default="GMM")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--batch-size", type=int, default=4)
@@ -18,6 +19,13 @@ def get_opt():
     parser.add_argument("--checkpoint", type=str, default="checkpoints/GMM/gmm_final.pth")
     parser.add_argument("--gpu_ids", type=str, default="0")
     parser.add_argument("--test_pairs", type=str, default="test_pairs.txt")
+
+    # ✅ Add back compatibility args
+    parser.add_argument("--stage", type=str, default="GMM", help="Stage: GMM or TOM")
+    parser.add_argument("--datamode", type=str, default="test", help="train or test")
+    parser.add_argument("--data_list", type=str, default="test_pairs.txt", help="Pair list file")
+    parser.add_argument("--grid_size", type=int, default=5, help="TPS grid size")
+
     return parser.parse_args()
 
 
@@ -35,7 +43,7 @@ def main():
     if os.path.exists(opt.checkpoint):
         print(f"Loading checkpoint from {opt.checkpoint}")
         checkpoint = torch.load(opt.checkpoint)
-        model.load_state_dict(checkpoint, strict=False)  # avoid crash on mismatch
+        model.load_state_dict(checkpoint, strict=False)  # loose loading
     else:
         print(f"⚠️ Checkpoint not found: {opt.checkpoint}")
 
@@ -59,7 +67,7 @@ def main():
 
             from torchvision.utils import save_image
             save_image(output, result_file)
-            print(f"Saved: {result_file}")
+            print(f"✅ Saved: {result_file}")
 
 
 if __name__ == "__main__":
