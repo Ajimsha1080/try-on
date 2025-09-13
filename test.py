@@ -12,10 +12,10 @@ from torchvision.utils import save_image
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', type=str, default='GMM')
 parser.add_argument('--batch-size', type=int, default=4)
-parser.add_argument('--datapath', type=str, default='data/test')
+parser.add_argument('--dataroot', type=str, default='data')   # ✅ match cp_dataset.py
+parser.add_argument('--datamode', type=str, default='test')   # ✅ match cp_dataset.py
 parser.add_argument('--checkpoint', type=str, default='checkpoints/GMM/gmm_final.pth')
 parser.add_argument('--test_pairs', type=str, default='test_pairs.txt')
-parser.add_argument('--data_list', type=str, default='test_pairs.txt')  # Fix missing attribute
 parser.add_argument('--result_dir', type=str, default='result')
 parser.add_argument('--workers', type=int, default=2)
 opt = parser.parse_args()
