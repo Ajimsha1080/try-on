@@ -1,47 +1,53 @@
-# networks.py
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class FeatureExtraction(nn.Module):
-    def __init__(self, input_nc=22):  # Set input channels to 22
-        super(FeatureExtraction, self).__init__()
-        self.model = nn.Sequential(
-            nn.Conv2d(input_nc, 64, kernel_size=4, stride=2, padding=1),
+# --------------------------
+# GMM (Geometric Matching Module)
+# --------------------------
+class GMM(nn.Module):
+    def __init__(self):
+        super(GMM, self).__init__()
+
+        # extractionA (person image feature extractor)
+        self.extractionA = nn.Sequential(
+            nn.Conv2d(22, 64, kernel_size=4, stride=2, padding=1),  # input channels = 22
             nn.ReLU(inplace=True),
-            nn.Conv2d(64, 22, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, kernel_size=4, stride=2, padding=1),
             nn.ReLU(inplace=True)
         )
 
-    def forward(self, x):
-        return self.model(x)
-
-class Regressor(nn.Module):
-    def __init__(self):
-        super(Regressor, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(22*48*64, 512),
+        # extractionB (cloth image feature extractor)
+        self.extractionB = nn.Sequential(
+            nn.Conv2d(1, 64, kernel_size=4, stride=2, padding=1),   # input channels = 1
             nn.ReLU(inplace=True),
-            nn.Linear(512, 256),
+            nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1),
             nn.ReLU(inplace=True),
-            nn.Linear(256, 6)  # affine transformation
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(inplace=True)
         )
 
-    def forward(self, x):
-        x = x.view(x.size(0), -1)
-        return self.model(x)
+        # Correlation layer (matches features)
+        self.correlation = nn.Conv2d(128, 128, kernel_size=1)
 
-class GMM(nn.Module):
-    def __init__(self, opt=None):
-        super(GMM, self).__init__()
-        self.extractionA = FeatureExtraction(input_nc=22)
-        self.extractionB = FeatureExtraction(input_nc=22)
-        self.regressor = Regressor()
+        # Regressor to predict TPS transformation
+        self.regressor = nn.Sequential(
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 2 * 5 * 5, kernel_size=3, padding=1)  # grid_size = 5
+        )
 
-    def forward(self, cloth, person):
-        featA = self.extractionA(cloth)
-        featB = self.extractionB(person)
-        combined = featA + featB
-        theta = self.regressor(combined)
-        # For simplicity, return combined as output (adjust based on your original GMM forward)
-        return combined
+    def forward(self, person, cloth):
+        featA = self.extractionA(person)
+        featB = self.extractionB(cloth)
+        corr = self.correlation(featA * featB)
+        theta = self.regressor(corr)
+        return theta
