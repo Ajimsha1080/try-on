@@ -2,11 +2,11 @@ import os
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-
-# ✅ Corrected imports
-from cp_dataset import CPDataset, CPDataLoader
-from networks import GMM  # or other networks you use
 import argparse
+
+# ✅ Use only CPDataset (no CPDataLoader in your repo)
+from cp_dataset import CPDataset
+from networks import GMM  # or other networks you use
 
 
 def get_opt():
@@ -24,9 +24,9 @@ def get_opt():
 def main():
     opt = get_opt()
 
-    # ✅ Dataset
+    # ✅ Dataset + DataLoader
     dataset = CPDataset(opt)
-    dataloader = CPDataLoader(dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.workers)
+    dataloader = DataLoader(dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.workers)
 
     # ✅ Model
     model = GMM(opt)
@@ -35,8 +35,7 @@ def main():
     if os.path.exists(opt.checkpoint):
         print(f"Loading checkpoint from {opt.checkpoint}")
         checkpoint = torch.load(opt.checkpoint)
-        # strict=False lets us bypass missing/unexpected keys
-        model.load_state_dict(checkpoint, strict=False)
+        model.load_state_dict(checkpoint, strict=False)  # avoid crash on mismatch
     else:
         print(f"⚠️ Checkpoint not found: {opt.checkpoint}")
 
@@ -44,9 +43,6 @@ def main():
     model.eval()
     with torch.no_grad():
         for i, inputs in enumerate(dataloader):
-            c_names = inputs["c_name"]
-            im_names = inputs["im_name"]
-
             cloth = inputs["cloth"].cuda()
             cloth_mask = inputs["cloth_mask"].cuda()
             im = inputs["image"].cuda()
@@ -60,6 +56,7 @@ def main():
             save_path = os.path.join("results", opt.name)
             os.makedirs(save_path, exist_ok=True)
             result_file = os.path.join(save_path, f"result_{i}.png")
+
             from torchvision.utils import save_image
             save_image(output, result_file)
             print(f"Saved: {result_file}")
