@@ -1,6 +1,6 @@
 # tryon+ (CVPRW 2020)
 Official implementation for "CP-VTON+: Clothing Shape and Texture Preserving Image-Based Virtual Try-On" .
-<br/>Project page: https://minar09.github.io/cpvtonplus/. 
+ 
 <br/>Saved/Pre-trained models: [Checkpoints](https://1drv.ms/u/c/5435770760f02d2f/ES8t8GAHdzUggFSABAAAAAAB5ArDGoOr2-DU2pyW7NmH-g?e=7ZUxRA)
 <br/>Dataset: [VITON_PLUS](https://1drv.ms/u/c/5435770760f02d2f/ES8t8GAHdzUggFSEBAAAAAABdOEe5WT0SPidEIqFG-ys-Q?e=qGt3BA)
 <br/>The code and pre-trained models are tested with pytorch 0.4.1, torchvision 0.2.1, opencv-python 4.1 and pillow 5.4 (Python 3 env).
