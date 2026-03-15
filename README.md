@@ -1,12 +1,11 @@
-# tryon+ (CVPRW 2020)
+# tryon+ 
 Official implementation for "CP-VTON+: Clothing Shape and Texture Preserving Image-Based Virtual Try-On" .
  
 <br/>Saved/Pre-trained models: [Checkpoints](https://1drv.ms/u/c/5435770760f02d2f/ES8t8GAHdzUggFSABAAAAAAB5ArDGoOr2-DU2pyW7NmH-g?e=7ZUxRA)
 <br/>Dataset: [VITON_PLUS](https://1drv.ms/u/c/5435770760f02d2f/ES8t8GAHdzUggFSEBAAAAAABdOEe5WT0SPidEIqFG-ys-Q?e=qGt3BA)
 <br/>The code and pre-trained models are tested with pytorch 0.4.1, torchvision 0.2.1, opencv-python 4.1 and pillow 5.4 (Python 3 env).
 <br/><br/>
-[Project page](https://minar09.github.io/cpvtonplus/) | [Paper](https://minar09.github.io/cpvtonplus/cvprw20_cpvtonplus.pdf) | [Dataset](https://1drv.ms/u/c/5435770760f02d2f/ES8t8GAHdzUggFSEBAAAAAABdOEe5WT0SPidEIqFG-ys-Q?e=qGt3BA) | [Model](https://1drv.ms/u/c/5435770760f02d2f/ES8t8GAHdzUggFSABAAAAAAB5ArDGoOr2-DU2pyW7NmH-g?e=7ZUxRA) | [Video](https://www.youtube.com/watch?v=MPB_PYLOfd8)
-<br/><br/>
+ 
 	
 ## Usage
 This pipeline combines consecutive training and testing of GMM and TOM. GMM generates the warped clothes according to the target human. Then, TOM blends the warped clothes outputs from GMM into the target human properties to generate the final try-on output.
@@ -66,16 +65,7 @@ There are many factors that can cause distorted/unexpected results. Can you plea
 Its difficult to understand your issue from only single image/output. As I mentioned, there are various factors. Please debug yourself step by step and see where its going wrong. Check all the available intermediate/final inputs/outputs visually, and check multiple cases to see if the issue is happening for all cases. Good luck to you!
 
 
-## Citation
-Please cite our paper in your publications if it helps your research:
-```
-@InProceedings{Minar_CPP_2020_CVPR_Workshops,
-	title={CP-VTON+: Clothing Shape and Texture Preserving Image-Based Virtual Try-On},
-	author={Minar, Matiur Rahman and Thai Thanh Tuan and Ahn, Heejune and Rosin, Paul and Lai, Yu-Kun},
-	booktitle = {The IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},
-	month = {June},
-	year = {2020}
-}
+ 
 ```
 
 ### Acknowledgements
